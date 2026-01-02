@@ -1,0 +1,22 @@
+# Python 缓存
+__pycache__/
+*.pyc
+
+# 虚拟环境
+venv/
+.env
+
+# 训练产物 (忽略所有文件夹和 .pth 文件)
+checkpoints/
+logs/
+*.pth
+final_model.pth
+
+# 数据集
+data/
+*.jsonl
+
+# IDE 配置
+.vscode/
+.idea/
+.DS_Store
