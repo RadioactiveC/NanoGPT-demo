@@ -1,10 +1,12 @@
 # NanoGPT-demo: A Lightweight Chinese GPT Implementation
 
-这是一个基于 PyTorch 从零实现的轻量级 GPT 模型（Decoder-only Transformer）。本项目参考了 Karpathy 的 nanoGPT，并针对中文语料（MiniMind 数据集）进行了适配。
+这是一个基于 PyTorch 从零实现的轻量级 GPT 模型（Decoder-only Transformer）。本项目参考了 Karpathy 的 nanoGPT，运用 Qwen (通义千问) 的 Tokenizer 针对中文语料（MiniMind 数据集）进行了适配。
 
-**核心特点：**
+- **核心特点：**
+- **Tokenizer 适配**：摒弃了对中文支持低效的 GPT-2 Tokenizer (3字节/字)，集成了 **Qwen-1.5 Tokenizer**。
+    - **效率提升**：实现了 1 汉字 ≈ 1 Token 的高压缩率（原版约为 3 Tokens/字）。
+    - **信息密度**：在相同的 Context Window (512) 下，模型能阅读的中文文本长度增加了约 **3倍**。
 - **代码极简**：核心代码模块化，拆分为 Model, Data, Train, Sample 四个独立脚本。
-- **中文适配**：使用 GPT-2 Tokenizer，针对中文语料进行了特殊 Token (`<|endoftext|>`) 的处理，修复了常见的编码错误。
 - **断点续训**：支持加载 Checkpoint，自动恢复模型权重、优化器状态和学习率调度器，随时中断和恢复训练。
 - **开箱即用**：自动从 HuggingFace 下载预训练数据，无需手动准备。
 
@@ -13,7 +15,7 @@
 ```text
 .
 ├── model.py        # GPT 模型架构定义 (SingleHead, MultiHead, FeedForward, Block)
-├── dataset.py      # 数据处理脚本 (基于 tiktoken 和 datasets 库，含特殊字符清洗)
+├── dataset.py      # 数据处理脚本 (集成 Transformers 库，使用 Qwen Tokenizer 处理数据)
 ├── train.py        # 训练主脚本 (包含断点续训逻辑、Cosine 学习率调度)
 ├── sample.py       # 推理脚本 (加载训练好的权重生成文本)
 ├── requirements.txt # 依赖库列表
@@ -39,9 +41,11 @@ python train.py
 ```
 **训练配置说明:**
 - **设备:** 默认优先使用 GPU (cuda)，无 GPU 则使用 CPU。
+- **Tokenizer:** 自动加载 Qwen/Qwen1.5-7B-Chat 的分词器。
+- **Vocab Size:** 脚本会自动检测 Tokenizer 大小并增加安全余量 (Buffer)，防止 Index Out of Bounds 错误。
 - **输出:** 训练过程中的 Checkpoint 会保存在 checkpoints/ 目录下。
 - **最终权重:** 训练结束后，模型会保存为 final_model.pth。
-关于断点续训 (Resuming Training): 如果你断了训练，想从某个 epoch 继续，请修改 train.py 中的 resume_from 变量
+关于断点续训 (Resuming Training): 如果你中断了训练，想从某个 epoch 继续，请修改 train.py 中的 resume_from 变量
 
 ### 3. 模型推理
 
@@ -51,7 +55,7 @@ python train.py
 python sample.py
 ```
 可以在 sample.py 中修改 input_str 变量来测试不同的输入提示词。
-
+- **注意:** 推理脚本中的 config.vocab_size 必须与训练时保持一致（当前代码已硬编码为适配 Qwen 的大小，如需修改训练逻辑请同步修改此处）。
 
 ## ⚙️ 模型配置
 
@@ -63,13 +67,13 @@ python sample.py
 | `n_head` | 12 | 注意力头数 |
 | `n_embd` | 768 | 嵌入维度 (Hidden Size) |
 | `block_size` | 512 | 上下文窗口大小 (Context Length) |
-| `vocab_size` | 50257 | 基于 GPT-2 词表 (Byte-Level BPE) |
+| `vocab_size` | ～15243 | 适配 Qwen 词表 (原 GPT-2 为 50257) |
 | `dropout` | 0.1 |防止过拟合的丢弃率 |
 
 ## 📚 数据集
 
 本项目使用 [MiniMind Dataset](https://huggingface.co/datasets/jingyaogong/minimind_dataset) (`pretrain_hq.jsonl`) 进行训练。
-
-- **数据处理**: 逻辑位于 `dataset.py`。
-- **清洗规则**: 自动去除 `<|im_start|>` 等无关标签，并将 `<|im_end|>` 统一替换为 GPT 标准结束符 `<|endoftext|>`。
-- **Tokenizer**: 使用 `tiktoken` 的 `gpt2` 编码器，并开启 `allowed_special` 选项以正确处理特殊 Token。
+- **Tokenizer**:Qwen/Qwen1.5-7B-Chat
+- **处理逻辑**: 逻辑位于 `dataset.py`。
+  - **清洗规则**: 自动清洗 <|im_start|> / <|im_end|> 等对话标签，仅保留纯文本用于 Pre-training。
+  - **Padding**: 使用统一的 EOS Token (<|endoftext|>) 进行文本截断与 Padding。
