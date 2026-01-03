@@ -1,13 +1,14 @@
 import torch
-import tiktoken
 from model import GPT, GPTconfig
-
+from transformers import AutoTokenizer
 # 环境
 device = "cuda" if torch.cuda.is_available() else "cpu"
-enc = tiktoken.get_encoding("gpt2")
+# tokenizer
+tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen1.5-7B-Chat", trust_remote_code=True)
 
 # 加载模型
 config = GPTconfig()
+config.vocab_size = 152243 # 修改vocab_size
 model = GPT(config).to(device)
 
 # 加载权重,权重需要放置在同级目录中
@@ -22,15 +23,16 @@ model.eval()
 print("Model loaded!")
 
 
-# 生成函数
+# 生成函数 是否对于多个长短不一的无法生效
 def generate_text(start_text, max_new_tokens=50):
-    ids = enc.encode(start_text)
+    ids = tokenizer.encode(start_text, add_special_tokens=False)
     ids = torch.tensor(ids, dtype=torch.long, device=device).unsqueeze(0)  # (1, seq_len)
 
     with torch.no_grad():
         generated_ids = model.generate(ids, max_new_tokens=max_new_tokens)
 
-    return enc.decode(generated_ids[0].tolist())
+    # 解码
+    return tokenizer.decode(generated_ids[0].tolist(), skip_special_tokens=True)
 
 
 # 测试

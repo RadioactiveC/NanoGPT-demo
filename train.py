@@ -7,17 +7,18 @@ from dataset import MyDataset
 # 配置
 device = "cuda" if torch.cuda.is_available() else "cpu"
 checkpoint_dir = "checkpoints"
-resume_from = "gpt_epoch.pth"  # 想恢复的权重路径，填None则从头训练
+resume_from = "final_model.pth"  # 想恢复的权重路径，填None则从头训练
 # resume_from = None
-total_epochs = 4  # 训练总轮次
+total_epochs = 6  # 训练总轮次
 start_epoch = 0  #断点续训起点
 
 if not os.path.exists(checkpoint_dir):
     os.makedirs(checkpoint_dir)
 
 # 准备数据
-torch.manual_seed(1337)
+torch.manual_seed(1024)
 full_dataset = MyDataset(max_lines=10000)
+real_vocab_size = getattr(full_dataset, 'vocab_size', 152000) +600
 train_size = int(0.9 * len(full_dataset))
 val_size = len(full_dataset) - train_size
 train_data, val_data = random_split(full_dataset, [train_size, val_size])
@@ -27,9 +28,11 @@ val_loader = DataLoader(val_data, batch_size=12, shuffle=False)
 
 # 初始化模型与优化器
 config = GPTconfig()
+config.vocab_size = real_vocab_size # 覆盖默认的 50257
 model = GPT(config).to(device)
 optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
-scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=total_epochs * len(train_loader))
+total_steps = (len(full_dataset) // 12) * total_epochs
+scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=total_steps)
 
 # 断点继续训，填一下续训的轮次
 if resume_from and os.path.exists(resume_from):
